@@ -129,6 +129,9 @@
             pointer-events: all;
             box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
             text-shadow: 1px 1px 0 #000;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
         }
 
         .fire-btn:active {
@@ -561,6 +564,9 @@
                 // Contrôles
                 this.keys = {};
                 this.touch = { x: 0, y: 0, active: false };
+                this.isFiring = false;
+                this.lastFireTime = 0;
+                this.fireRate = 150; // ms entre chaque tir
                 
                 this.init();
             }
@@ -572,12 +578,17 @@
                 // Événements clavier
                 document.addEventListener('keydown', (e) => {
                     this.keys[e.key] = true;
-                    if (e.key === ' ' && this.gameState === 'playing') this.shoot();
+                    if (e.key === ' ' && this.gameState === 'playing') {
+                        this.isFiring = true;
+                    }
                     if (e.key === 'Escape') this.togglePause();
                 });
                 
                 document.addEventListener('keyup', (e) => {
                     this.keys[e.key] = false;
+                    if (e.key === ' ') {
+                        this.isFiring = false;
+                    }
                 });
                 
                 // Événements tactiles
@@ -597,7 +608,9 @@
             setupTouchControls() {
                 const joystick = document.getElementById('joystick');
                 const joystickArea = document.querySelector('.joystick-area');
+                const fireBtn = document.getElementById('fireBtn');
                 
+                // Joystick pour le mouvement
                 joystick.addEventListener('touchstart', (e) => {
                     this.touch.active = true;
                     e.preventDefault();
@@ -625,16 +638,39 @@
                     e.preventDefault();
                 });
                 
-                document.addEventListener('touchend', () => {
-                    this.touch.active = false;
-                    this.touch.x = 0;
-                    this.touch.y = 0;
-                    joystick.style.transform = 'translate(0, 0)';
+                document.addEventListener('touchend', (e) => {
+                    // Ne réinitialiser le joystick que si le toucher n'est pas sur le bouton de tir
+                    if (!e.target || e.target.id !== 'fireBtn') {
+                        this.touch.active = false;
+                        this.touch.x = 0;
+                        this.touch.y = 0;
+                        joystick.style.transform = 'translate(0, 0)';
+                    }
                 });
                 
-                document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
-                    if (this.gameState === 'playing') this.shoot();
+                // Bouton de tir avec support pour le tir en rafale
+                fireBtn.addEventListener('touchstart', (e) => {
+                    this.isFiring = true;
                     e.preventDefault();
+                });
+                
+                fireBtn.addEventListener('touchend', (e) => {
+                    this.isFiring = false;
+                    e.preventDefault();
+                });
+                
+                // Support pour souris également
+                fireBtn.addEventListener('mousedown', () => {
+                    this.isFiring = true;
+                });
+                
+                fireBtn.addEventListener('mouseup', () => {
+                    this.isFiring = false;
+                });
+                
+                // Permettre de quitter le bouton de tir sans arrêter le jeu
+                fireBtn.addEventListener('mouseleave', () => {
+                    this.isFiring = false;
                 });
             }
             
@@ -671,6 +707,7 @@
                 this.score = 0;
                 this.lives = 3;
                 this.level = 1;
+                this.isFiring = false;
                 
                 this.player = {
                     x: this.canvas.width / 2 - 16 * this.PIXEL_SCALE,
@@ -725,13 +762,17 @@
             }
             
             shoot() {
-                this.bullets.push({
-                    x: this.player.x + this.player.width / 2 - 2,
-                    y: this.player.y,
-                    width: 4,
-                    height: 10,
-                    speed: 8
-                });
+                const currentTime = Date.now();
+                if (currentTime - this.lastFireTime > this.fireRate) {
+                    this.bullets.push({
+                        x: this.player.x + this.player.width / 2 - 2,
+                        y: this.player.y,
+                        width: 4,
+                        height: 10,
+                        speed: 8
+                    });
+                    this.lastFireTime = currentTime;
+                }
             }
             
             gameLoop(timestamp) {
@@ -776,6 +817,11 @@
             updateGame(deltaTime) {
                 // Déplacer le joueur
                 this.movePlayer();
+                
+                // Tir automatique si le bouton est maintenu
+                if (this.isFiring) {
+                    this.shoot();
+                }
                 
                 // Générer des ennemis
                 this.spawnEnemies();
@@ -1030,5 +1076,4 @@
         });
     </script>
 </body>
-
 </html>
